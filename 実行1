@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="料理ルーレット">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ff7a3d">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23ff7a3d'/%3E%3Ctext x='50' y='68' font-size='56' text-anchor='middle'%3E🍳%3C/text%3E%3C/svg%3E">
+<title>料理リストルーレット</title>
+<style>
+  :root { --main:#ff7a3d; --bg:#fff8f3; --card:#fff; --text:#333; --sub:#888; --line:#eee; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:-apple-system,"Hiragino Sans",sans-serif; background:var(--bg); color:var(--text);
+         padding:env(safe-area-inset-top) 0 calc(70px + env(safe-area-inset-bottom)); }
+  header { background:var(--main); color:#fff; text-align:center; padding:14px; font-weight:bold; font-size:18px; }
+  .page { display:none; padding:16px; max-width:520px; margin:0 auto; }
+  .page.active { display:block; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#fff; border-top:1px solid var(--line);
+        padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; padding:12px 0; border:none; background:none; font-size:14px; color:var(--sub); }
+  nav button.active { color:var(--main); font-weight:bold; }
+  .card { background:var(--card); border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+  input[type=text], textarea { width:100%; font-size:16px; padding:10px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; font-family:inherit; }
+  textarea { min-height:70px; resize:vertical; }
+  .btn { background:var(--main); color:#fff; border:none; border-radius:12px; padding:12px 16px; font-size:16px; font-weight:bold; width:100%; }
+  .btn.sub { background:#fff; color:var(--main); border:1px solid var(--main); }
+  .btn.small { width:auto; padding:6px 12px; font-size:13px; }
+  .btn:disabled { opacity:.4; }
+  #result { font-size:30px; font-weight:bold; text-align:center; padding:36px 10px; min-height:110px; word-break:break-all; }
+  #result.spinning { color:var(--sub); }
+  #resultMemo { text-align:center; color:var(--sub); white-space:pre-wrap; font-size:14px; margin-top:-16px; margin-bottom:16px; }
+  .item { display:flex; align-items:flex-start; gap:10px; }
+  .item .body { flex:1; }
+  .item .name { font-weight:bold; font-size:16px; }
+  .item .memo { color:var(--sub); font-size:13px; white-space:pre-wrap; margin-top:2px; }
+  .item input[type=checkbox] { width:22px; height:22px; margin-top:2px; accent-color:var(--main); }
+  .actions { display:flex; gap:6px; margin-top:8px; }
+  .del { color:#d33; background:none; border:none; font-size:13px; padding:4px 8px; }
+  .edit { color:var(--main); background:none; border:none; font-size:13px; padding:4px 8px; }
+  .hint { color:var(--sub); font-size:13px; text-align:center; margin:8px 0 14px; }
+  .row { display:flex; gap:8px; }
+  h3 { margin:6px 0 10px; font-size:15px; }
+</style>
+</head>
+<body>
+<header>🍳 料理リストルーレット</header>
+
+<!-- ルーレット -->
+<section id="page-roulette" class="page active">
+  <div class="card">
+    <div id="result">今日は何を作る？</div>
+    <div id="resultMemo"></div>
+    <button class="btn" id="spinBtn">ルーレットを回す</button>
+  </div>
+  <div class="hint" id="countHint"></div>
+</section>
+
+<!-- リスト -->
+<section id="page-list" class="page">
+  <div class="card">
+    <h3 id="formTitle">料理を追加</h3>
+    <input type="text" id="nameInput" placeholder="料理名（例：肉じゃが）" maxlength="40">
+    <textarea id="memoInput" placeholder="メモ（材料・コツ・感想など）"></textarea>
+    <div class="row">
+      <button class="btn" id="saveBtn">追加</button>
+      <button class="btn sub" id="cancelBtn" style="display:none">やめる</button>
+    </div>
+  </div>
+  <div class="hint">チェックを入れた料理だけがルーレットに入ります</div>
+  <div id="list"></div>
+</section>
+
+<!-- 設定 -->
+<section id="page-data" class="page">
+  <div class="card">
+    <h3>バックアップ</h3>
+    <p class="hint" style="text-align:left">データはこの端末のSafari内にだけ保存されます。履歴やサイトデータを消すと消えるので、たまに書き出しておくと安心です。</p>
+    <button class="btn" id="exportBtn" style="margin-bottom:10px">データを書き出す（コピー）</button>
+    <textarea id="importArea" placeholder="書き出したデータをここに貼り付けて復元"></textarea>
+    <button class="btn sub" id="importBtn">貼り付けたデータで復元</button>
+  </div>
+</section>
+
+<nav>
+  <button data-page="roulette" class="active">🎲 ルーレット</button>
+  <button data-page="list">📝 料理リスト</button>
+  <button data-page="data">💾 バックアップ</button>
+</nav>
+
+<script>
+const KEY = "ryori-roulette-v1";
+let dishes = [];
+let editingId = null;
+let spinning = false;
+
+function load() {
+  try { dishes = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { dishes = []; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(dishes)); } catch (e) { alert("保存できませんでした"); }
+}
+const $ = id => document.getElementById(id);
+
+// タブ切り替え
+document.querySelectorAll("nav button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $("page-" + b.dataset.page).classList.add("active");
+  };
+});
+
+// リスト描画
+function render() {
+  const list = $("list");
+  list.innerHTML = "";
+  if (!dishes.length) list.innerHTML = '<div class="hint">まだ料理がありません。上のフォームから追加しましょう。</div>';
+  dishes.forEach(d => {
+    const el = document.createElement("div");
+    el.className = "card item";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = d.on;
+    cb.onchange = () => { d.on = cb.checked; save(); updateHint(); };
+    const body = document.createElement("div");
+    body.className = "body";
+    const name = document.createElement("div"); name.className = "name"; name.textContent = d.name;
+    const memo = document.createElement("div"); memo.className = "memo"; memo.textContent = d.memo || "";
+    const act = document.createElement("div"); act.className = "actions";
+    const ed = document.createElement("button"); ed.className = "edit"; ed.textContent = "編集";
+    ed.onclick = () => startEdit(d.id);
+    const del = document.createElement("button"); del.className = "del"; del.textContent = "削除";
+    del.onclick = () => { if (confirm("「" + d.name + "」を削除しますか？")) { dishes = dishes.filter(x => x.id !== d.id); save(); render(); } };
+    act.append(ed, del);
+    body.append(name, memo, act);
+    el.append(cb, body);
+    list.append(el);
+  });
+  updateHint();
+}
+function updateHint() {
+  const n = dishes.filter(d => d.on).length;
+  $("countHint").textContent = n ? `ルーレット対象：${n}品` : "料理リストに料理を追加してください";
+  $("spinBtn").disabled = n === 0;
+}
+
+// 追加・編集
+function resetForm() {
+  editingId = null;
+  $("nameInput").value = ""; $("memoInput").value = "";
+  $("formTitle").textContent = "料理を追加";
+  $("saveBtn").textContent = "追加";
+  $("cancelBtn").style.display = "none";
+}
+function startEdit(id) {
+  const d = dishes.find(x => x.id === id);
+  if (!d) return;
+  editingId = id;
+  $("nameInput").value = d.name; $("memoInput").value = d.memo || "";
+  $("formTitle").textContent = "料理を編集";
+  $("saveBtn").textContent = "保存";
+  $("cancelBtn").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("saveBtn").onclick = () => {
+  const name = $("nameInput").value.trim();
+  if (!name) { alert("料理名を入力してください"); return; }
+  const memo = $("memoInput").value.trim();
+  if (editingId) {
+    const d = dishes.find(x => x.id === editingId);
+    if (d) { d.name = name; d.memo = memo; }
+  } else {
+    dishes.unshift({ id: Date.now() + "" + Math.floor(Math.random() * 1000), name, memo, on: true });
+  }
+  save(); resetForm(); render();
+};
+$("cancelBtn").onclick = resetForm;
+
+// ルーレット
+$("spinBtn").onclick = () => {
+  if (spinning) return;
+  const pool = dishes.filter(d => d.on);
+  if (!pool.length) return;
+  spinning = true;
+  $("spinBtn").disabled = true;
+  $("resultMemo").textContent = "";
+  const result = $("result");
+  result.classList.add("spinning");
+  const winner = pool[Math.floor(Math.random() * pool.length)];
+  let count = 0, total = 22, delay = 60;
+  (function tick() {
+    if (count >= total) {
+      result.classList.remove("spinning");
+      result.textContent = "🍽 " + winner.name;
+      $("resultMemo").textContent = winner.memo || "";
+      spinning = false; updateHint();
+      return;
+    }
+    result.textContent = pool[Math.floor(Math.random() * pool.length)].name;
+    count++; delay += 12;
+    setTimeout(tick, delay);
+  })();
+};
+
+// バックアップ
+$("exportBtn").onclick = async () => {
+  const text = JSON.stringify(dishes);
+  try { await navigator.clipboard.writeText(text); alert("コピーしました。メモアプリなどに貼り付けて保管してください。"); }
+  catch (e) { $("importArea").value = text; $("importArea").select(); alert("下の欄に表示しました。全選択してコピーしてください。"); }
+};
+$("importBtn").onclick = () => {
+  try {
+    const data = JSON.parse($("importArea").value);
+    if (!Array.isArray(data)) throw 0;
+    if (!confirm("現在のデータを上書きして復元しますか？")) return;
+    dishes = data.filter(d => d && d.name).map(d => ({
+      id: d.id || Date.now() + "" + Math.random(), name: String(d.name), memo: String(d.memo || ""), on: d.on !== false
+    }));
+    save(); render(); $("importArea").value = ""; alert("復元しました");
+  } catch (e) { alert("データの形式が正しくありません"); }
+};
+
+load(); render();
+</script>
+</body>
+</html>
